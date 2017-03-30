@@ -42,8 +42,10 @@ class PigBody():
 		#self.append(self.clientsocket)
 
 		#
+		temp = pigSocket.pigListener('right','localhost',36757)
+		self.ready_inputs.append(temp)
 		try:
-			temp = pigSocket.pigSocket().buildSocket('right','localhost',36757)
+			temp = pigSocket.pigListener('right','localhost',36757)
 			self.ready_inputs.append(temp)
 		except:
 			pass
@@ -69,13 +71,13 @@ class PigBody():
 					clients,servers = pigCommands.commandInput(self,keyboard)
 					for client in clients:
 						try:
-							cSocket = pigSocket.pigSocket().pigConnect(client.side,client.address,client.port)
+							cSocket = pigSocket.pigConnector(client.side,client.address,client.port)
 							self.headsOrTails(cSocket)
 						except socket.error as e:
 							print(e)
 					for server in servers:
 						try:
-							sSocket = pigSocket.pigSocket().buildSocket(server.side,server.address,int(server.port))
+							sSocket = pigSocket.pigListener(server.side,server.address,int(server.port))
 							self.ready_inputs.append(sSocket)
 							self.headsOrTails(sSocket)
 						except socket.error as e:
@@ -83,7 +85,7 @@ class PigBody():
 					sys.stdout.write('>')
 					sys.stdout.flush()
 
-				if isinstance(fds,pigSocket.pigSocket) and not fds.accepted:
+				if isinstance(fds,pigSocket.pigListener) and not fds.accepted:
 					#cSocket,cAddr = fds.pigAccept()
 					#temp = pigSocket.acceptedPigSocket(fds.side,cSocket)
 					fds = fds.pigAccept(True)
@@ -97,8 +99,9 @@ class PigBody():
 							print(data.decode("utf-8") )
 						except:
 							print("utf-8 incompatible data received")
-						#print(fds.side)
-						#Still needs replaced with headsortails()
+						#should have some better forwarding logic here.
+						#Maybe it should go within the socket object
+						#for more granular control s
 						if(fds.side == 'left'):
 							for srocket in self.tails:
 								srocket.send(data)
