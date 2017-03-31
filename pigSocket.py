@@ -14,6 +14,7 @@ class pigSocket:
 	def fileno(self):
 		return self.socket.fileno()
 
+	#Here is where we will configure if socket wants to send or not.
 	def send(self,data):
 		return self.socket.send(data)
 
@@ -47,6 +48,18 @@ class pigListener(pigSocket):
 #for active/connecting socket
 class pigConnector(pigSocket):
 	def __init__(self,side,address,port):
-		socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		socket.connect((address, int(port)))
-		super().__init__(side,socket)
+		self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		self.socket.connect((address, int(port)))
+		super().__init__(side,self.socket)
+
+#listening socket for interacting with pig without stdin
+class adminSocket(pigListener):
+	def __init__(self):
+		self.password = 'password'
+		super().__init__(None,'localhost',39000)
+
+	def pigAccept(self,password):
+		if(self.password == password):
+			self.socket,self.address = self.socket.accept()
+			self.accepted = True
+			return self

@@ -19,14 +19,21 @@ atexit.register(quit)
 class PigBody():
 
 	def __init__(self):
-		self.heads = []
-		self.tails = []
+		self.heads = [] #lefts
+		self.tails = [] #rights
 
+		self.insertMode = False
 		self.lrforward = True
 		self.rlforward = True
 
 		self.ready_inputs = []
 		self.outputs = []
+
+		try:
+			temp = pigSocket.pigListener('right','localhost',36757)
+			self.ready_inputs.append(temp)
+		except socket.error as e:
+			print(e)
 
 		if(platform.system() == 'Linux'):
 			self.ready_inputs.append(sys.stdin)
@@ -35,21 +42,6 @@ class PigBody():
 		else:
 			print("Non-linux system detected. stdin will not be available.")
 			#print("Please use command line parameters or a config file.")
-
-		#self.clientsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		#self.clientsocket.connect(('192.168.2.16', 8888))
-		#self.outputs.append(self.clientsocket)
-		#self.append(self.clientsocket)
-
-		#
-		temp = pigSocket.pigListener('right','localhost',36757)
-		self.ready_inputs.append(temp)
-		try:
-			temp = pigSocket.pigListener('right','localhost',36757)
-			self.ready_inputs.append(temp)
-		except:
-			pass
-
 
 		self.main()
 
@@ -66,48 +58,61 @@ class PigBody():
 
 			for fds in readable:
 				
-				if fds == sys.stdin:
-					keyboard = sys.stdin.readline()
-					clients,servers = pigCommands.commandInput(self,keyboard)
-					for client in clients:
-						try:
-							cSocket = pigSocket.pigConnector(client.side,client.address,client.port)
-							self.headsOrTails(cSocket)
-						except socket.error as e:
-							print(e)
-					for server in servers:
-						try:
-							sSocket = pigSocket.pigListener(server.side,server.address,int(server.port))
-							self.ready_inputs.append(sSocket)
-							self.headsOrTails(sSocket)
-						except socket.error as e:
-							print("Error: port " + server.port + " already in use.")
-					sys.stdout.write('>')
-					sys.stdout.flush()
-
 				if isinstance(fds,pigSocket.pigListener) and not fds.accepted:
-					#cSocket,cAddr = fds.pigAccept()
-					#temp = pigSocket.acceptedPigSocket(fds.side,cSocket)
 					fds = fds.pigAccept(True)
 					self.ready_inputs.append(fds)
 					self.headsOrTails(fds)
 
+				if fds == sys.stdin or isinstance(fds,pigSocket.adminSocket):
+					if(fds == sys.stdin):
+						keyboard = sys.stdin.readline()
+					else:
+						keyboard = fds.recv(1024)
+
+					if(keyboard.strip() == 'i'):
+						self.insertMode = True
+						print("inserting:")
+						break
+
+					if(self.insertMode):
+						if(keyboard.strip() == 'q'):
+							self.insertMode = False
+							break
+						else:
+							for srocket in self.tails + self.heads:
+								srocket.send(keyboard.encode("utf-8"))	
+						break
+
+					inputcommands = pigCommands.commandInput(self,keyboard)
+					for command in inputcommands:
+						try:
+							if(command.sType == 'client'):
+								nSocket = pigSocket.pigConnector(command.side,command.address,command.port)
+							elif(command.sType == 'server'):
+								nSocket = pigSocket.pigListener(command.side,command.address,int(command.port))
+								self.ready_inputs.append(nSocket)
+							self.headsOrTails(nSocket)
+
+						except socket.error as e:
+							print(e)
+					
+					sys.stdout.write('>')
+					sys.stdout.flush()				
+
 				else:
+					print(fds)
 					data = fds.recv(1024)
 					if data:
 						try:
-							print(data.decode("utf-8") )
+							print(data.decode("utf-8"))
 						except:
 							print("utf-8 incompatible data received")
-						#should have some better forwarding logic here.
-						#Maybe it should go within the socket object
-						#for more granular control s
+
 						if(fds.side == 'left'):
-							for srocket in self.tails:
+							for srocket in self.tails: #left/head sends to right/tails
 								srocket.send(data)
 						if(fds.side == 'right'):
-							for srocket in self.heads:
-								print("well?!")
+							for srocket in self.heads: #right/tails send to left/heads
 								srocket.send(data)
 					else:
 						fds.close()
@@ -116,7 +121,3 @@ class PigBody():
 
 
 pig = PigBody()
-
-#x = pigSocket.pigSocket('localhost',36751)
-#ready_inputs.append(x)
-#ready_inputs.append(pigSocket.pigSocket('localhost',36752))
